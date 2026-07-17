@@ -487,6 +487,40 @@ def build_stats_embed():
 
 bot = commands.Bot(command_prefix=BOT_PREFIX, help_command=None)
 
+# ─── Monkey-patch for Bot token compatibility ───
+# discord.py-self is designed for user tokens (self-bot), sending the token
+# as-is in the Authorization header. But Discord Bot tokens require the
+# "Bot " prefix for REST API calls (NOT for WebSocket identify).
+# We store the raw token and only add "Bot " in the HTTP header.
+
+import discord.http as http_module
+
+_original_static_login = http_module.HTTPClient.static_login
+
+async def _patched_static_login(self, token):
+    self._raw_token = token  # Store raw token for WebSocket
+    # The library will use self.token in both REST and WS.
+    # We'll keep raw token in self.token and only prefix "Bot " in headers.
+    return await _original_static_login(self, token)
+
+http_module.HTTPClient.static_login = _patched_static_login
+
+# Patch the request method to add "Bot " prefix to Authorization header
+_original_request = http_module.HTTPClient.request
+
+async def _patched_request(self, route, *, files=None, form=None, **kwargs):
+    # Temporarily prefix token for this request only
+    if self.token and not self.token.startswith("Bot "):
+        original_token = self.token
+        self.token = f"Bot {original_token}"
+        try:
+            return await _original_request(self, route, files=files, form=form, **kwargs)
+        finally:
+            self.token = original_token  # Restore raw token
+    return await _original_request(self, route, files=files, form=form, **kwargs)
+
+http_module.HTTPClient.request = _patched_request
+
 # Store which channel to send stats updates to
 stats_channel = None
 stats_update_task = None
@@ -896,15 +930,10 @@ if __name__ == "__main__":
         print("[!] No proxies found. Reports will use direct connection.")
     
     # Get bot token
-    bot_token_raw = get_bot_token()
-    if not bot_token_raw:
+    bot_token = get_bot_token()
+    if not bot_token:
         print("[X] No bot token provided. Exiting.")
         sys.exit(1)
-    
-    # discord.py-self sends the token as-is in the Authorization header.
-    # Bot tokens require "Bot " prefix, user tokens don't.
-    # This is a bot token, so prefix it accordingly.
-    bot_token = f"Bot {bot_token_raw}"
     
     try:
         bot.run(bot_token)
