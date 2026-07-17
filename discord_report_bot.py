@@ -485,9 +485,7 @@ def build_stats_embed():
 # DISCORD BOT SETUP
 # ============================================================
 
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix=BOT_PREFIX, intents=intents)
+bot = commands.Bot(command_prefix=BOT_PREFIX)
 
 # Store which channel to send stats updates to
 stats_channel = None
