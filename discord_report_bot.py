@@ -485,7 +485,7 @@ def build_stats_embed():
 # DISCORD BOT SETUP
 # ============================================================
 
-bot = commands.Bot(command_prefix=BOT_PREFIX)
+bot = commands.Bot(command_prefix=BOT_PREFIX, help_command=None)
 
 # Store which channel to send stats updates to
 stats_channel = None
@@ -896,10 +896,15 @@ if __name__ == "__main__":
         print("[!] No proxies found. Reports will use direct connection.")
     
     # Get bot token
-    bot_token = get_bot_token()
-    if not bot_token:
+    bot_token_raw = get_bot_token()
+    if not bot_token_raw:
         print("[X] No bot token provided. Exiting.")
         sys.exit(1)
+    
+    # discord.py-self sends the token as-is in the Authorization header.
+    # Bot tokens require "Bot " prefix, user tokens don't.
+    # This is a bot token, so prefix it accordingly.
+    bot_token = f"Bot {bot_token_raw}"
     
     try:
         bot.run(bot_token)
