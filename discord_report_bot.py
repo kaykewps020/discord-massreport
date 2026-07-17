@@ -472,19 +472,43 @@ def build_embed():
 
 if __name__ == "__main__":
     print(INTRO)
+
+    # GitHub Actions: only env var (no interactive prompt)
+    token = os.environ.get("DISCORD_BOT_TOKEN")
+    if not token:
+        print("[X] DISCORD_BOT_TOKEN env var not set.")
+        print("[X] Set it in GitHub Secrets (repo > Settings > Secrets > Actions)")
+        sys.exit(1)
+
     n = load_proxies()
     print(f"[✓] Auto-loaded {n} proxies from storage")
     if n == 0: print("[!] No proxies found. Will use direct connection.")
 
-    token = os.environ.get("DISCORD_BOT_TOKEN") or input("Bot token: ").strip()
-    if not token:
-        print("[X] No token. Exiting.")
-        sys.exit(1)
+    # Auto-reconnect loop — keeps alive in GitHub Actions
+    max_retries = 50
+    retry_delay = 30  # seconds
+    retries = 0
 
-    try:
-        bot.run(token)
-    except discord.LoginFailure:
-        print("[X] Invalid bot token. Reset it in Discord Developer Portal.")
-        sys.exit(1)
-    except KeyboardInterrupt:
-        print("\n[!] Shutdown.")
+    while retries < max_retries:
+        try:
+            print(f"[*] Starting bot (attempt {retries + 1}/{max_retries})...")
+            bot.run(token, reconnect=True)
+        except discord.LoginFailure:
+            print("[X] Invalid bot token. Check your GitHub Secret.")
+            sys.exit(1)
+        except discord.ConnectionClosed as e:
+            retries += 1
+            print(f"[!] Connection closed (code {e.code}). Reconnecting in {retry_delay}s... ({retries}/{max_retries})")
+            time.sleep(retry_delay)
+            continue
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            print("\n[!] Shutdown.")
+            sys.exit(0)
+        except Exception as e:
+            retries += 1
+            print(f"[!] Unexpected error: {e}. Reconnecting in {retry_delay}s... ({retries}/{max_retries})")
+            time.sleep(retry_delay)
+            continue
+
+    print("[X] Max retries reached. Exiting.")
+    sys.exit(1)

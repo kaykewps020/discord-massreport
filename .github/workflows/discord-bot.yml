@@ -1,0 +1,47 @@
+name: 🎯 Discord Mass Report Bot
+
+on:
+  workflow_dispatch:  # Manual trigger via GitHub UI
+  schedule:
+    # Restart every 5 hours to stay within the 6h job limit
+    - cron: '0 */5 * * *'
+
+jobs:
+  run-bot:
+    name: Run Mass Report Bot
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # Max allowed for GitHub-hosted runners
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install discord.py aiohttp
+          echo "✅ Dependencies installed"
+
+      - name: Verify proxy paths (optional)
+        run: |
+          echo "ℹ️  Proxy paths are for Android storage - not available on GH runner"
+          echo "ℹ️  Bot will run without proxies unless you configure them via /proxies load"
+
+      - name: Run Bot 🚀
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+        run: |
+          echo "🔑 Token loaded from secrets"
+          echo "🤖 Starting bot..."
+          python -u discord_report_bot.py
+
+      - name: Notify failure
+        if: failure()
+        run: |
+          echo "❌ Bot stopped unexpectedly at $(date)"
